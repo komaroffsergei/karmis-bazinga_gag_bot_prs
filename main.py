@@ -1,63 +1,75 @@
 import locale
-from collections import defaultdict
-
+import re
+from datetime import datetime
+from time import sleep
 from pyquery import PyQuery as pq
 
+from db import create_tables, find, store
 
-def parse(name):
-    locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
-    pages = get_pages()
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+structured = False
+d = {
+    'января': 'январь',
+    'февраля': 'февраль',
+    'марта': 'март',
+    'апреля': 'апрель',
+    'мая': 'май',
+    'июня': 'июнь',
+    'июля': 'июль',
+    'августа': 'август',
+    'сентября': 'сентябрь',
+    'октября': 'октябрь',
+    'ноября': 'ноябрь',
+    'декабря': 'декабрь',
+}
 
 
-def get_pages():
+def parse():
+    locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
+    # db
+    structured = create_tables()
+    if structured is not True:
+        print('Cant create structure')
+        return False
+
     page = pq(url='http://bashorg.org/page/1', parser='html')
-    hrefs = page('#page .navigation a')
-    count = hrefs.length
-    max_page = int(hrefs[count - 2].text)
-    i = 0
-    pages = []
-    quotes = defaultdict(list)
-    for page_num in range(max_page):
-        i = i + 1
+    pages = page('#page .navigation a')
+    count = pages.length
+
+    max_page = int(pages[count - 2].text)
+    for page_num in range(568, max_page):
+
+        print('------------- page N: ' + str(page_num) + ' ----------------')
+
         page = pq(url='http://bashorg.org/page/' + str(page_num), parser='html')
-        for q_num in range(max_page):
-            q = page.find('.q').eq(q_num)
-            if q and q.text:
-                i = int(q.text().split(':')[0].split('|')[0].split('#')[1].strip())  # id
-                dt = q.text().split('\n')[0].split('|')[1].strip()
-                # d = datetime.strptime(dt, u'%d %b %Y')
-                q = "".join(q.text().split('\n')[1:])
-                l = len(q)
-                i = i + 1
-                quotes[i].append({
-                    'i': i, # index
-                    'd': dt, # date
-                    'q': q, # quote
-                    'l': l, # length
-                    'v': 1 # allowed
-                })
-                # ['q'].append(q.text())
+        sleep(1)
+        quotes = page('#page .quote').length
+        for q_num in range(quotes):
+            q_dirty = page.find('.q').eq(q_num)
+            if q_dirty and q_dirty.text:
+                q_text = q_dirty.text()
+                i = int(q_text.split(':')[0].split(' | ')[0].split('#')[1])  # id
+                found = find(i)
+                if found is not True:
+                    q_ent = re.sub('<.*?>', '', q_text.split('\n+')[0]).strip()
+                    d = get_date(q_text.split('\n')[0].split('|')[1].strip())
+                    l = len(q_text)
+                    store(i, d.date(), q_ent, l, '1')
+                    sleep(.2)
+                    print(">>>>Quote N:" + str(i) + " from " + str(d.date()) + " added")
+                else:
+                    print(">>>>Quote N:" + str(i) + " skipped")
 
-        # quotes = page.find('.q').eq
-        # quotes.each(lambda q: print(quotes[q].text))
-        print('-------------------------------')
-        # for quote in quotes:
-        #     if quote and hasattr(quote, 'text'):
-        #         print(quote.text)
-        #         print('-------------------------------')
 
-        # time.sleep(1)
-    print((quotes['q']))
 
-    # connect to db
 
-    # print(max_page.text)
+def get_date(dt):
+    for k, v in d.items():
+        dt = dt.replace(k, v)
+    date_obj = datetime.strptime(dt, '%d %B %Y')
+
+    return date_obj
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    parse('--finish--')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    parse()
