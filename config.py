@@ -1,23 +1,15 @@
-#!/usr/bin/python
 from configparser import ConfigParser
+import os
 
 
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
+def config(filename="database.ini", section="postgresql"):
     parser = ConfigParser()
-    # read config file
     parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            # print(param)
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
-
-config()
+    values = dict(parser.items(section)) if parser.has_section(section) else {}
+    for key, variable in {"host": "DB_HOST", "database": "DB_DATABASE", "user": "DB_USER", "password": "DB_PASSWORD"}.items():
+        if variable in os.environ:
+            values[key] = os.environ[variable]
+    missing = [key for key in ("host", "database", "user", "password") if not values.get(key)]
+    if missing:
+        raise ValueError("Configure database.ini or DB_* environment variables; missing: " + ", ".join(missing))
+    return values
